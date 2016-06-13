@@ -81,7 +81,7 @@ try {
 
 
 
-    app.post("/fhir/Questionnaire/_search", function( req, res ) {
+    app.post("/fhir/STU3/Questionnaire/_search", function( req, res ) {
 	var url = getHostURL(nconf,req) ;
 	var query = req.query;
 	var post = req.body;
@@ -112,7 +112,7 @@ try {
 	getQuestionnaires(nconf,url,false,processQuestionnaires);
     });    
 
-    app.get("/fhir/Questionnaire/:fhir_id", function( req, res ) {
+    app.get("/fhir/STU3/Questionnaire/:fhir_id", function( req, res ) {
 	var url = getHostURL(nconf,req) ;
 	var uuid = req.params.fhir_id;
 	var processQuestionnaires = function(questionnaires) {
