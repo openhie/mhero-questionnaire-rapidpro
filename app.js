@@ -80,63 +80,28 @@ try {
     console.log('listening on port ' + lport);
 
 
-
-    app.post("/fhir/STU3/Questionnaire/_search", function( req, res ) {
-	var url = getHostURL(nconf,req) ;
-	var query = req.query;
-	var post = req.body;
-	var filters= [];
-	if ( query ) {
-            for( i in query ) {
-		filters.push( parseSearch( i, query[i] ));
-            }
-	}
-	if ( post ) {
-            for( i in post ) {
-		filters.push( parseSearch( i, post[i] ));
-            }
-	}
-	var processQuestionnaires  = function(questionnaires) {
-	    filters.forEach(function(filter)  {
-		questionnaires = questionnaires.filter(filter);
-	    });	
-	    res.status(200);
-	    res.type("application/json+fhir");
-            var bundle = { 
-		resourceType : 'Bundle',
-		type : 'searchset',
-		entry : questionnaires
-	    }
-            res.json(bundle);
-	}
-	getQuestionnaires(nconf,url,false,processQuestionnaires);
-    });    
+    app.get("/fhir/DSTU2/Questionnaire/:fhir_id", function( req, res ) {
+	retrieveQuestionnaires(req,res,getQuestionnaires_DSTU2);
+    });
 
     app.get("/fhir/STU3/Questionnaire/:fhir_id", function( req, res ) {
-	var url = getHostURL(nconf,req) ;
-	var uuid = req.params.fhir_id;
-	var processQuestionnaires = function(questionnaires) {
-
-	    console.log("found:"+JSON.stringify(questionnaires,null,"\t"));
-
-	    if ( Object.keys(questionnaires).length == 0 ) {
-		res.status(500);
-		res.json( errorOutcome( ERR_SEARCH, 'information', 'No questionnaire found with uuid ' + req.params.fhir_id));
-		res.end();
-	    } else if ( Object.keys(questionnaires).length >1  ) {
-		res.status(500);
-		res.json( errorOutcome( ERR_SEARCH, 'information', 'Too many questionnaires found with uuid ' + req.params.fhir_id));
-		res.end();
-	    } else {
-		res.status(200);
-		res.type("application/json+fhir");
-		res.json(questionnaires[0]);
-		res.end();
-	    }
-	}
-	getQuestionnaires(nconf,url,uuid,processQuestionnaires);
-	
+	retrieveQuestionnaires(req,res,getQuestionnaires_STU3);
     });
+
+    app.post("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
+	seachQuestionnaires(req,res,getQuestionnaires_DSTU2);
+    });
+    app.get("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
+	seachQuestionnaires(req,res,getQuestionnaires_DSTU2);
+    });
+
+    app.post("/fhir/STU3/Questionnaire/_search", function( req, res ) {
+	seachQuestionnaires(req,res,getQuestionnaires_STU3);
+    });
+    app.get("/fhir/STU3/Questionnaire/_search", function( req, res ) {
+	seachQuestionnaires(req,res,getQuestionnaires_STU3);
+    });
+
 
 } catch (e) {
     console.log("RapidPro Questionnaire error: " +e.message);
@@ -189,7 +154,74 @@ function getHostURL(nconf,req) {
 }
 
 
-function getQuestionnaires(nconf,url,uuid,callback) {
+
+function retreiveQuestionnaire(req,res,getQuestionnairesCallback) {
+    var url = getHostURL(nconf,req) ;
+    var uuid = req.params.fhir_id;
+    var processQuestionnaires = function(questionnaires) {
+
+	console.log("found:"+JSON.stringify(questionnaires,null,"\t"));
+
+	if ( Object.keys(questionnaires).length == 0 ) {
+	    res.status(500);
+	    res.json( errorOutcome( ERR_SEARCH, 'information', 'No questionnaire found with uuid ' + req.params.fhir_id));
+	    res.end();
+	} else if ( Object.keys(questionnaires).length >1  ) {
+	    res.status(500);
+	    res.json( errorOutcome( ERR_SEARCH, 'information', 'Too many questionnaires found with uuid ' + req.params.fhir_id));
+	    res.end();
+	} else {
+	    res.status(200);
+	    res.type("application/json+fhir");
+	    res.json(questionnaires[0]);
+	    res.end();
+	}
+    }
+    getQuestionnairesCallback(nconf,url,uuid,processQuestionnaires);
+    
+});
+
+function searchQuestionnaires(req,res,getQuestionnairesCallBack) {
+    var url = getHostURL(nconf,req) ;
+    var query = req.query;
+    var post = req.body;
+    var filters= [];
+    if ( query ) {
+        for( i in query ) {
+	    filters.push( parseSearch( i, query[i] ));
+        }
+    }
+    if ( post ) {
+        for( i in post ) {
+	    filters.push( parseSearch( i, post[i] ));
+        }
+    }
+    var returnQuestionnaires  = function(questionnaires) {
+	filters.forEach(function(filter)  {
+	    questionnaires = questionnaires.filter(filter);
+	});	
+	res.status(200);
+	res.type("application/json+fhir");
+        var bundle = { 
+	    resourceType : 'Bundle',
+	    type : 'searchset',
+	    entry : questionnaires
+	}
+        res.json(bundle);
+    }
+    getQuestionnairesCallback(nconf,url,false,returnQuestionnaires);
+});    
+
+function getQuestionnaires_STU3(nconf,url,uuid,callback) {
+    getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlow_STU3);
+}
+
+function getQuestionnaires_DSTU2(nconf,url,uuid,callback) {
+    getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlow_DSTU2);
+}
+
+
+function getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlowCallback) {
     var questionnaires= [];    
     if (!callback) {
 	callback = function(questionnaires) {return questionnaires;};
@@ -239,7 +271,7 @@ function getQuestionnaires(nconf,url,uuid,callback) {
 				var createQ  = function(flow) {
 				    console.log('createQ' + JSON.stringify(flow,null,"\t"));
 				    if (flow) {
-					questionnaires.push(createQuestionnaireFromFlow(url,result,flow));
+					questionnaires.push(createQuestionnaireFromFlowCallback(url,result,flow));
 				    }
 				    callback();
 				};
@@ -266,9 +298,11 @@ function getQuestionnaires(nconf,url,uuid,callback) {
 }
 
 
+function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 
+}
 
-function createQuestionnaireFromFlow(url,result,flow) {
+function createQuestionnaireFromFlow_STU3(url,result,flow) {
     var questions = [];
     console.log("RESULT:" + JSON.stringify(flow,null,"\t"));
     if (flow.rule_sets  && Array.isArray(flow.rule_sets)) {			    
