@@ -81,11 +81,11 @@ try {
 
 
     app.get("/fhir/DSTU2/Questionnaire/:fhir_id", function( req, res ) {
-	retrieveQuestionnaires(req,res,getQuestionnaires_DSTU2);
+	retrieveQuestionnaire(req,res,getQuestionnaires_DSTU2);
     });
 
     app.get("/fhir/STU3/Questionnaire/:fhir_id", function( req, res ) {
-	retrieveQuestionnaires(req,res,getQuestionnaires_STU3);
+	retrieveQuestionnaire(req,res,getQuestionnaires_STU3);
     });
 
     app.post("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
@@ -155,7 +155,7 @@ function getHostURL(nconf,req) {
 
 
 
-function retreiveQuestionnaire(req,res,getQuestionnairesCallback) {
+function retrieveQuestionnaire(req,res,getQuestionnairesCallback) {
     var url = getHostURL(nconf,req) ;
     var uuid = req.params.fhir_id;
     var processQuestionnaires = function(questionnaires) {
@@ -179,7 +179,7 @@ function retreiveQuestionnaire(req,res,getQuestionnairesCallback) {
     }
     getQuestionnairesCallback(nconf,url,uuid,processQuestionnaires);
     
-});
+}
 
 function searchQuestionnaires(req,res,getQuestionnairesCallBack) {
     var url = getHostURL(nconf,req) ;
@@ -210,7 +210,7 @@ function searchQuestionnaires(req,res,getQuestionnairesCallBack) {
         res.json(bundle);
     }
     getQuestionnairesCallback(nconf,url,false,returnQuestionnaires);
-});    
+}    
 
 function getQuestionnaires_STU3(nconf,url,uuid,callback) {
     getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlow_STU3);
@@ -299,7 +299,232 @@ function getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlowCa
 
 
 function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
+    var questions = [];
+    var optionSets = [];
+    console.log("RESULT:" + JSON.stringify(flow,null,"\t"));
+    if (flow.rule_sets  && Array.isArray(flow.rule_sets)) {			    
+	flow.rule_sets.forEach(function(ruleset) {
+	    if (!ruleset.rules || ! Array.isArray(ruleset.rules)) {
+		return;
+	    }			
+	    var options = [];
+	    console.log('processing ' + ruleset.ruleset_type);
+	    switch (ruleset.ruleset_type) {
+	    case 'wait_recording': //ivr recording
+		break;
+	    case 'wait_digit':	//ivr choice
+		var type = 'choice';
+		ruleset.rules.forEach(function(rule) {
+		    if (!rule.test ||  !rule.test.type == 'eq') { 
+			return;
+		    }
+		    var val = false;
+		    if (rule.category) {
+			val = rule.category[Object.keys(rule.category)[0]];
+		    }
+		    if (! (val === false)) {
+			var option = {'code' : val};
+			if (rule.test.test != 'true') {
+			    option['valueInteger']  =  rule.test.test;
+			}
 
+			options.push(option);
+		    }
+		});
+		var question = {
+		    'linkId': ruleset.uuid  + '.' + type,
+		    'type': 'choice',
+		    'options': options,
+		    'text': ruleset.label + ' (' + type +  ')'
+		}
+		questions.push(question);				    
+		break;
+	    case 'wait_digits':	//ivr multi-digit response
+		var types = ['string'];
+		ruleset.rules.forEach(function(rule) {
+		    if (!rule.test) {
+			return;
+		    }
+		    var type= false;
+		    switch (rule.test.type) {
+		    case 'phone': 
+		    case 'true': //this seems to be just a text string					    
+			types.push('string');
+			break;
+		    case 'not_empty': 
+		    case 'contains_any': 
+		    case 'contains': 
+		    case 'starts': 
+		    case 'regex': 
+			var val = false;
+			if (rule.category) {
+			    val = rule.category[Object.keys(rule.category)[0]];
+			}
+			if (! (val === false)) {
+			    var option = {'code' : val};
+			    options.push(option);
+			}
+			types.push('string');
+			break;
+		    case 'number':
+			types.push('integer');
+			break;
+		    case 'gt':
+		    case 'eq':
+		    case 'lt':
+		    case 'between':
+			var val = false;
+			if (rule.category) {
+			    val = rule.category[Object.keys(rule.category)[0]];
+			}
+			if (! (val === false)) {
+			    var option = {'code' : val};
+			    options.push(option);
+			}
+			types.push('integer');
+			break;
+		    default:
+			break;
+		    };
+		});
+		break;
+	    case 'wait_message':	//sms response
+		var types = ['string'];
+		ruleset.rules.forEach(function(rule) {
+		    if (!rule.test) {
+			return;
+		    }
+		    var type= false;
+		    switch (rule.test.type) {
+		    case 'phone': 
+		    case 'true': //this seems to be just a text string					    
+			types.push('string');
+			break;
+		    case 'not_empty': 
+		    case 'contains_any': 
+		    case 'contains': 
+		    case 'starts': 
+		    case 'regex': 
+			var val = false;
+			if (rule.category) {
+			    val = rule.category[Object.keys(rule.category)[0]];
+			}
+			if (! (val === false)) {
+			    var option = {'code' : val};
+			    options.push(option);
+			}
+			types.push('string');
+			break;
+		    case 'ward': 
+		    case 'district': 
+			// SHOULD HAVE VALUESETS ?
+			break;
+		    case 'date':
+			types.push('date');
+			break;
+		    case 'date_equal':
+		    case 'date_before':
+		    case 'date_after':
+			var val = false;
+			if (rule.category) {
+			    val = rule.category[Object.keys(rule.category)[0]];
+			}
+			if (! (val === false)) {
+			    var option = {'code' : val};
+			    options.push(option);
+			}
+			types.push('date');
+			break;
+		    case 'number':
+			types.push('decimal');//could also be an integer
+			break;
+		    case 'gt':
+		    case 'eq':
+		    case 'lt':
+		    case 'between':
+			var val = false;
+			console.log(rule.category);
+			console.log(Object.keys(rule.category)[0]);
+			if (rule.category) {
+			    val = rule.category[Object.keys(rule.category)[0]];
+			}
+			console.log(val);
+			if (! (val === false)) {
+			    var option = {'code' : val};
+			    options.push(option);
+			}
+			types.push('string');
+			break;
+		    default:
+			break;
+		    }
+		});
+		utypes = types.filter(function(e,p) {return types.indexOf(e) == p;});
+		utypes.forEach(function(type) {
+		    var question = {
+			'linkId': ruleset.uuid  + '.' + type,
+			'type': type,
+			'text': ruleset.label  + ' (' + type +  ')'
+		    }
+		    questions.push(question);
+		});		    
+			       
+		if (options.length > 1) {
+		    var question = {
+			'linkId': ruleset.uuid  + '.choice',
+			'type': 'choice',
+			'options': {
+			    'reference' : '#optionsSet-' + ruleset.uuid
+			},
+			'text': ruleset.label + ' ( choice )'
+		    }
+		    optionSets.push(
+			{
+			    'resourceType' : 'ValueSet',
+			    'id' : 'optionSet-' + ruleset.uuid,			    
+			    'codeSystem' : {
+				'concept' : options
+			    }
+			});
+		    questions.push(question);
+		}
+		//now push an question for the raw response
+		questions.push({
+		    'linkId': ruleset.uuid  + '.raw',
+		    'type': 'string',
+		    'text': ruleset.label  + ' (Raw Response)'
+		});
+		break;
+	    default:
+		break;
+	    }
+	});
+    }
+    if (!flow.metadata) {
+	flow.metadata = {};
+    }
+    var questionnaire = {
+	'resourceType':'Questionnaire',
+	'id': result.uuid ,
+	'meta' : {
+	    'lastUpdated': flow.metadata.saved_on ,
+	    'versionId': flow.metadata.revision
+	},
+	'date' : flow.metadata.saved_on,
+	'status' : result.archived ? 'retired' : 'published' ,
+	'group' : {
+	    'linkId' : 'root',
+	    'title': result.name,
+	    'question' : questions
+
+	}
+
+    };
+    if (optionSets.length > 0) {
+	questionnaire['contained'] = optionSets;
+    }
+    console.log("QUESITONNAIRE:" + JSON.stringify(questionnaire,null,"\t"));
+    return questionnaire;
 }
 
 function createQuestionnaireFromFlow_STU3(url,result,flow) {
