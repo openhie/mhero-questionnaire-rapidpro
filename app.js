@@ -5,6 +5,8 @@ var bodyParser = require('body-parser');
 var convert = require('./convert');
 var uuidlib = require('uuid');
 var async = require("async");
+var query = require('querystring');
+
 
 nconf.argv().file("config.json");
 nconf.defaults( { 
@@ -89,17 +91,29 @@ try {
     });
 
     app.post("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
-	seachQuestionnaires(req,res,getQuestionnaires_DSTU2);
+	searchQuestionnaires(req,res,getQuestionnaires_DSTU2);
     });
     app.get("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
-	seachQuestionnaires(req,res,getQuestionnaires_DSTU2);
+	searchQuestionnaires(req,res,getQuestionnaires_DSTU2);
     });
 
     app.post("/fhir/STU3/Questionnaire/_search", function( req, res ) {
-	seachQuestionnaires(req,res,getQuestionnaires_STU3);
+	searchQuestionnaires(req,res,getQuestionnaires_STU3);
     });
     app.get("/fhir/STU3/Questionnaire/_search", function( req, res ) {
-	seachQuestionnaires(req,res,getQuestionnaires_STU3);
+	searchQuestionnaires(req,res,getQuestionnaires_STU3);
+    });
+
+
+    app.get("/fhir/DSTU2/QuestionnaireResponse/:fhir_id", function( req, res ) {
+	retrieveQuestionnaireResponse(req,res,getQuestionnaireResponses_DSTU2);
+    });
+
+    app.post("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
+	searchQuestionnaireResponses(req,res,getQuestionnaireResponses_DSTU2);
+    });
+    app.get("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
+	searchQuestionnaireResponses(req,res,getQuestionnaireResponses_DSTU2);
     });
 
 
@@ -157,7 +171,9 @@ function getHostURL(nconf,req) {
 
 function retrieveQuestionnaire(req,res,getQuestionnairesCallback) {
     var url = getHostURL(nconf,req) ;
-    var uuid = req.params.fhir_id;
+    var params = {
+	'uuid' : req.params.fhir_id
+    }
     var processQuestionnaires = function(questionnaires) {
 
 	console.log("found:"+JSON.stringify(questionnaires,null,"\t"));
@@ -177,15 +193,48 @@ function retrieveQuestionnaire(req,res,getQuestionnairesCallback) {
 	    res.end();
 	}
     }
-    getQuestionnairesCallback(nconf,url,uuid,processQuestionnaires);
+    getQuestionnairesCallback(nconf,url,params,processQuestionnaires);
     
 }
 
-function searchQuestionnaires(req,res,getQuestionnairesCallBack) {
+
+function retrieveQuestionnaireRepsonse(req,res,getQuestionnaireResponsessCallback) {
+    var url = getHostURL(nconf,req) ;
+    var params = {
+	'run' : req.params.fhir_id
+    }
+    var processQuestionnaireResponsess = function(questionnaireResponses) {
+
+	console.log("found:"+JSON.stringify(questionnaireResponses,null,"\t"));
+
+	if ( Object.keys(questionnaireResponses).length == 0 ) {
+	    res.status(500);
+	    res.json( errorOutcome( ERR_SEARCH, 'information', 'No questionnaire response found with uuid ' + req.params.fhir_id));
+	    res.end();
+	} else if ( Object.keys(questionnaireResponses).length >1  ) {
+	    res.status(500);
+	    res.json( errorOutcome( ERR_SEARCH, 'information', 'Too many questionnaire responses found with uuid ' + req.params.fhir_id));
+	    res.end();
+	} else {
+	    res.status(200);
+	    res.type("application/json+fhir");
+	    res.json(questionnaireResponses[0]);
+	    res.end();
+	}
+    }
+    getQuestionnaireResponsesCallback(nconf,url,params,processQuestionnaireResponses);
+    
+}
+
+function searchQuestionnaires(req,res,getQuestionnairesCallback) {
     var url = getHostURL(nconf,req) ;
     var query = req.query;
     var post = req.body;
     var filters= [];
+    var params = {};
+    if (query._id) {
+	params.run = query._id;
+    }
     if ( query ) {
         for( i in query ) {
 	    filters.push( parseSearch( i, query[i] ));
@@ -209,32 +258,86 @@ function searchQuestionnaires(req,res,getQuestionnairesCallBack) {
 	}
         res.json(bundle);
     }
-    getQuestionnairesCallback(nconf,url,false,returnQuestionnaires);
+    getQuestionnairesCallback(nconf,url,params,returnQuestionnaires);
 }    
 
-function getQuestionnaires_STU3(nconf,url,uuid,callback) {
-    getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlow_STU3);
+
+
+function searchQuestionnaireResponses(req,res,getQuestionnaireResponsessCallback) {
+    var url = getHostURL(nconf,req) ;
+    var query = req.query;
+    var post = req.body;
+    var filters= [];
+    var params = {};
+    if (query._id) {
+	params.run = query._id;
+    }
+    if (query.questionnaire) {
+	params.flow_uuid = query.questionnaire;
+    }
+    if (query.source) {
+	params.contact = query.source;
+    }
+
+    if ( query ) {
+        for( i in query ) {
+	    filters.push( parseSearch( i, query[i] ));
+        }
+    }
+    if ( post ) {
+        for( i in post ) {
+	    filters.push( parseSearch( i, post[i] ));
+        }
+    }
+    var returnQuestionnaireResponses  = function(questionnaireResponses) {
+	filters.forEach(function(filter)  {
+	    questionnaireRespones = questionnaireResponses.filter(filter);
+	});	
+	res.status(200);
+	res.type("application/json+fhir");
+        var bundle = { 
+	    resourceType : 'Bundle',
+	    type : 'searchset',
+	    entry : questionnaireResponses
+	}
+        res.json(bundle);
+    }
+    getQuestionnaireResponsesCallback(nconf,url,params,returnQuestionnaireResponses);
+}    
+
+function getQuestionnaires_STU3(nconf,url,params,callback) {
+    getQuestionnaires(nconf,url,params,callback,createQuestionnaireFromFlow_STU3);
 }
 
-function getQuestionnaires_DSTU2(nconf,url,uuid,callback) {
-    getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlow_DSTU2);
+function getQuestionnaires_DSTU2(nconf,url,params,callback) {
+    getQuestionnaires(nconf,url,params,callback,createQuestionnaireFromFlow_DSTU2);
+}
+
+function getQuestionnaireResponses_STU3(nconf,url,params,callback) {
+    getQuestionnaireResponses(nconf,url,params,callback,createQuestionnaireResponseFromRun_STU3);
+}
+
+function getQuestionnaireResponses_DSTU2(nconf,url,params,callback) {
+    getQuestionnaireResponses(nconf,url,params,callback,createQuestionnaireResponseFromRun_DSTU2);
 }
 
 
-function getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlowCallback) {
+
+
+function getQuestionnaires(nconf,url,params,callback,createQuestionnaireFromFlowCallback) {
     var questionnaires= [];    
     if (!callback) {
 	callback = function(questionnaires) {return questionnaires;};
     }
-
+    var qs = query.stringify(params);
     var rurl = 'http(s)://' + nconf.get('rapidpro:host') + ':'  + nconf.get('rapidpro:port') + "/api/v1/flows.json";
-    console.log('Making request ' + rurl);
+    console.log('Making request ' + rurl + '?' + qs);
     var req = hh.request( 
 	{
             hostname : nconf.get("rapidpro:host"),
             port : nconf.get("rapidpro:port"),
 	    protocol: nconf.get('rapidpro:protocol'),
-            path :  "/api/v1/flows.json" ,
+            path :  "/api/v1/flows.json?"  + qs ,
             headers : {
 		'Content-Type': "application/json",
 		'Authorization' : nconf.get("rapidpro:token"),
@@ -262,10 +365,7 @@ function getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlowCa
 		    }		    
 		    var tasks = [];
 		    details.results.forEach( function(result) {
-			if (uuid && result.uuid != uuid) {
-			    return;
-			}
-
+			
 			tasks.push( 
 			    function(callback) {
 				var createQ  = function(flow) {
@@ -297,6 +397,89 @@ function getQuestionnaires(nconf,url,uuid,callback,createQuestionnaireFromFlowCa
     req.end();
 }
 
+
+
+function getQuestionnaireResponses(nconf,url,params,callback,createQuestionnaireResponseFromRunCallback) {
+    var questionnaireResponses= [];    
+    if (!callback) {
+	callback = function(questionnaireResponses) {return questionnaireResponses;};
+    }
+
+    var rurl = 'http(s)://' + nconf.get('rapidpro:host') + ':'  + nconf.get('rapidpro:port') + "/api/v1/runs.json";
+    console.log('Making request ' + rurl);
+    //likely relevant search parameters: 
+    //  run: the id of the QR
+    //  flow_uuid:   the ID of questionnaire
+    //  contact: id ID of the contact
+    var qs = query.stringify(params);
+
+    var req = hh.request( 
+	{
+            hostname : nconf.get("rapidpro:host"),
+            port : nconf.get("rapidpro:port"),
+	    protocol: nconf.get('rapidpro:protocol'),
+            path :  "/api/v1/runs.json?" + qs ,
+            headers : {
+		'Content-Type': "application/json",
+		'Authorization' : nconf.get("rapidpro:token"),
+            },
+            method : 'GET' 
+	},
+	function( res ) {
+            //console.log("RapidPro Status: " +res.statusCode );
+            res.on('error', function(e) {
+                console.log("RapidPro error: " +e.message);
+		callback([]);
+            });
+            var body = '';
+            res.on('data', function(chunk) {
+                body += chunk;
+            });
+            res.on('end', function() {
+                //console.log("RapidPro response: "+body);
+                try {
+		    var details = JSON.parse( body );
+		    if (!details.results || ! Array.isArray(details.results)) {
+			console.log("no flow results ");
+			callback([]);
+			return;
+		    }		    
+		    var tasks = [];
+		    details.results.forEach( function(result) {
+			tasks.push( 
+			    function(callback) {
+				var createQ  = function(flow) {
+				    console.log('createQ' + JSON.stringify(flow,null,"\t"));
+				    if (flow) {
+					questionnaires.push(createQuestionnaireResponseFromRunCallback(url,result,flow));
+				    }
+				    callback();
+				};
+				
+				getFlowExport(result.uuid,createQ); 
+			    });
+		    });
+		    async.parallel(tasks,function() {console.log('ok'); callback(questionnaires);});
+		    //console.log("Filtering" + JSON.stringify(questionnaires));
+		    //callback(questionnaires);
+                } catch ( err ) {
+                    console.log("Failed to parse rapid pro response." + body);
+                    console.log(err);
+		    callback([]);
+                }
+            });
+        });
+    req.on('error', function( req_err ) {
+        console.log("Got error on request to rapidpro");
+        console.log(req_err);
+	callback([]);
+    });
+    req.end();
+}
+
+
+function createQuestionnaireReponseFromRun_DSTU2(url,result,flow) {
+}
 
 function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
     var questions = [];
@@ -528,231 +711,7 @@ function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 }
 
 function createQuestionnaireFromFlow_STU3(url,result,flow) {
-    var questions = [];
-    console.log("RESULT:" + JSON.stringify(flow,null,"\t"));
-    if (flow.rule_sets  && Array.isArray(flow.rule_sets)) {			    
-	flow.rule_sets.forEach(function(ruleset) {
-	    if (!ruleset.rules || ! Array.isArray(ruleset.rules)) {
-		return;
-	    }			
-	    var options = [];
-	    console.log('processing ' + ruleset.ruleset_type);
-	    switch (ruleset.ruleset_type) {
-	    case 'wait_recording': //ivr recording
-		break;
-	    case 'wait_digit':	//ivr choice
-		var type = 'choice';
-		ruleset.rules.forEach(function(rule) {
-		    if (!rule.test ||  !rule.test.type == 'eq') { 
-			return;
-		    }
-		    var val = false;
-		    if (rule.category) {
-			val = rule.category[Object.keys(rule.category)[0]];
-		    }
-		    if (! (val === false)) {
-			var option = {
-			    'valueString' : val
-			}
-			if (rule.test.test != 'true') {
-			    option['valueInteger']  =  rule.test.test;
-			}
-
-			options.push(option);
-		    }
-		});
-		var question = {
-		    'linkId': ruleset.uuid  + '.' + type,
-		    'type': 'choice',
-		    'options': options,
-		    'text': ruleset.label + ' (' + type +  ')'
-		}
-		questions.push(question);				    
-		break;
-	    case 'wait_digits':	//ivr multi-digit response
-		var types = ['string'];
-		ruleset.rules.forEach(function(rule) {
-		    if (!rule.test) {
-			return;
-		    }
-		    var type= false;
-		    switch (rule.test.type) {
-		    case 'phone': 
-		    case 'true': //this seems to be just a text string					    
-			types.push('string');
-			break;
-		    case 'not_empty': 
-		    case 'contains_any': 
-		    case 'contains': 
-		    case 'starts': 
-		    case 'regex': 
-			var val = false;
-			if (rule.category) {
-			    val = rule.category[Object.keys(rule.category)[0]];
-			}
-			if (! (val === false)) {
-			    var option = {
-				'valueString' : val
-			    }
-			    options.push(option);
-			}
-			types.push('string');
-			break;
-		    case 'number':
-			types.push('integer');
-			break;
-		    case 'gt':
-		    case 'eq':
-		    case 'lt':
-		    case 'between':
-			var val = false;
-			if (rule.category) {
-			    val = rule.category[Object.keys(rule.category)[0]];
-			}
-			if (! (val === false)) {
-			    var option = {
-				'valueString' : val
-			    }
-			    options.push(option);
-			}
-			types.push('integer');
-			break;
-		    default:
-			break;
-		    };
-		});
-		break;
-	    case 'wait_message':	//sms response
-		var types = ['string'];
-		ruleset.rules.forEach(function(rule) {
-		    if (!rule.test) {
-			return;
-		    }
-		    var type= false;
-		    switch (rule.test.type) {
-		    case 'phone': 
-		    case 'true': //this seems to be just a text string					    
-			types.push('string');
-			break;
-		    case 'not_empty': 
-		    case 'contains_any': 
-		    case 'contains': 
-		    case 'starts': 
-		    case 'regex': 
-			var val = false;
-			if (rule.category) {
-			    val = rule.category[Object.keys(rule.category)[0]];
-			}
-			if (! (val === false)) {
-			    var option = {
-				'valueString' : val
-			    }
-			    options.push(option);
-			}
-			types.push('string');
-			break;
-		    case 'ward': 
-		    case 'district': 
-			// SHOULD HAVE VALUESETS ?
-			break;
-		    case 'date':
-			types.push('date');
-			break;
-		    case 'date_equal':
-		    case 'date_before':
-		    case 'date_after':
-			var val = false;
-			if (rule.category) {
-			    val = rule.category[Object.keys(rule.category)[0]];
-			}
-			if (! (val === false)) {
-			    var option = {
-				'valueString' : val
-			    }
-			    options.push(option);
-			}
-			types.push('date');
-			break;
-		    case 'number':
-			types.push('decimal');//could also be an integer
-			break;
-		    case 'gt':
-		    case 'eq':
-		    case 'lt':
-		    case 'between':
-			var val = false;
-			console.log(rule.category);
-			console.log(Object.keys(rule.category)[0]);
-			if (rule.category) {
-			    val = rule.category[Object.keys(rule.category)[0]];
-			}
-			console.log(val);
-			if (! (val === false)) {
-			    var option = {
-				'valueString' : val
-			    }
-			    options.push(option);
-			}
-			types.push('string');
-			break;
-		    default:
-			break;
-		    }
-		});
-		utypes = types.filter(function(e,p) {return types.indexOf(e) == p;});
-		utypes.forEach(function(type) {
-		    var question = {
-			'linkId': ruleset.uuid  + '.' + type,
-			'type': type,
-			'text': ruleset.label  + ' (' + type +  ')'
-		    }
-		    questions.push(question);
-		});		    
-			       
-		if (options.length > 1) {
-		    var question = {
-			'linkId': ruleset.uuid  + '.choice',
-			'type': 'choice',
-			'options': options,
-			'text': ruleset.label + ' ( choice )'
-		    }
-		    questions.push(question);
-		}
-		//now push an question for the raw response
-		questions.push({
-		    'linkId': ruleset.uuid  + '.raw',
-		    'type': 'string',
-		    'text': ruleset.label  + ' (Raw Response)'
-		});
-		break;
-	    default:
-		break;
-	    }
-	});
-    }
-    if (!flow.metadata) {
-	flow.metadata = {};
-    }
-    var questionnaire = {
-	'resourceType':'Questionnaire',
-	'id': result.uuid ,
-	'meta' : {
-	    'lastUpdated': flow.metadata.saved_on ,
-	    'versionId': flow.metadata.revision
-	},
-	'date' : flow.metadata.saved_on,
-	'url' :  url + '/fhir/Questionnaire/' + result.uuid,
-	'status' : result.archived ? 'retired' : 'published' ,
-	'group' : {
-	    'linkId' : 'root',
-	    'title': result.name,
-	    'question' : questions
-
-	}
-
-    };
-    console.log("QUESITONNAIRE:" + JSON.stringify(questionnaire,null,"\t"));
-    return questionnaire;
+    //fille me in 
 }
 
 
