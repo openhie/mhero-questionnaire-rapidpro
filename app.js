@@ -7,13 +7,15 @@ var uuidlib = require('uuid');
 var async = require("async");
 var query = require('querystring');
 
-
 nconf.argv().file("config.json");
 nconf.defaults( { 
     "rpq" : { 
         "port" : 3001,
 	'host' : 'locahost',
-	'protocol' : 'http'
+	'protocol' : 'http',
+	'hwr' : {
+	    'baseurl' : 'http://localhost/fhirServer/Practitioner'
+	}
     },
     'rapidpro' : {
 	'host' : 'localhost',
@@ -82,13 +84,6 @@ try {
     console.log('listening on port ' + lport);
 
 
-    app.get("/fhir/DSTU2/Questionnaire/:fhir_id", function( req, res ) {
-	retrieveQuestionnaire(req,res,getQuestionnaires_DSTU2);
-    });
-
-    app.get("/fhir/STU3/Questionnaire/:fhir_id", function( req, res ) {
-	retrieveQuestionnaire(req,res,getQuestionnaires_STU3);
-    });
 
     app.post("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
 	searchQuestionnaires(req,res,getQuestionnaires_DSTU2);
@@ -105,22 +100,28 @@ try {
     });
 
 
+    app.post("/fhir/DSTU2/QuestionnaireResponse/_search", function( req, res ) {
+	searchQuestionnaireResponses(req,res,getQuestionnaireResponses_DSTU2);
+    });
+    app.get("/fhir/DSTU2/QuestionnaireResponse/_search", function( req, res ) {
+	searchQuestionnaireResponses(req,res,getQuestionnaireResponses_DSTU2);
+    });
+
+
+
+    app.get("/fhir/DSTU2/Questionnaire/:fhir_id", function( req, res ) {
+	retrieveQuestionnaire(req,res,getQuestionnaires_DSTU2);
+    });
+    app.get("/fhir/STU3/Questionnaire/:fhir_id", function( req, res ) {
+	retrieveQuestionnaire(req,res,getQuestionnaires_STU3);
+    });
     app.get("/fhir/DSTU2/QuestionnaireResponse/:fhir_id", function( req, res ) {
 	retrieveQuestionnaireResponse(req,res,getQuestionnaireResponses_DSTU2);
     });
 
-    app.post("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
-	searchQuestionnaireResponses(req,res,getQuestionnaireResponses_DSTU2);
-    });
-    app.get("/fhir/DSTU2/Questionnaire/_search", function( req, res ) {
-	searchQuestionnaireResponses(req,res,getQuestionnaireResponses_DSTU2);
-    });
-
-
 } catch (e) {
     console.log("RapidPro Questionnaire error: " +e.message);
 }
-
 
 function errorOutcome( code, severity, diagnostics ) {
     var message = error_messages[code];
@@ -147,7 +148,7 @@ function errorOutcome( code, severity, diagnostics ) {
     };
 }
  
-function getHostURL(nconf,req) {
+function getHostURL(req) {
     var url = ''
     if (req) {
 	url = req.protocol + '://' + req.get('host') ;
@@ -167,10 +168,25 @@ function getHostURL(nconf,req) {
     return url;
 }
 
+function getFlowReference(id) {
+    var ptcl = nconf.get('app:protocol');
+    if (!ptcl) {
+	ptcl = 'https:';
+    }
+    var host = nconf.get('app:host');
+    var port = nconf.get('app:port');
+    var url = ptcl + '//' + host;
+    if (port) {
+	url += ':' + port;
+    }
+    return url + '/Quesionnaire/' + id;
+
+}
+
 
 
 function retrieveQuestionnaire(req,res,getQuestionnairesCallback) {
-    var url = getHostURL(nconf,req) ;
+    var url = getHostURL(req)
     var params = {
 	'uuid' : req.params.fhir_id
     }
@@ -193,17 +209,16 @@ function retrieveQuestionnaire(req,res,getQuestionnairesCallback) {
 	    res.end();
 	}
     }
-    getQuestionnairesCallback(nconf,url,params,processQuestionnaires);
+    getQuestionnairesCallback(url,params,processQuestionnaires);
     
 }
 
-
-function retrieveQuestionnaireRepsonse(req,res,getQuestionnaireResponsessCallback) {
-    var url = getHostURL(nconf,req) ;
+function retrieveQuestionnaireResponse(req,res,getQuestionnaireResponsesCallback) {
+    var url = getHostURL(req) ;
     var params = {
 	'run' : req.params.fhir_id
     }
-    var processQuestionnaireResponsess = function(questionnaireResponses) {
+    var processQuestionnaireResponses = function(questionnaireResponses) {
 
 	console.log("found:"+JSON.stringify(questionnaireResponses,null,"\t"));
 
@@ -222,12 +237,12 @@ function retrieveQuestionnaireRepsonse(req,res,getQuestionnaireResponsessCallbac
 	    res.end();
 	}
     }
-    getQuestionnaireResponsesCallback(nconf,url,params,processQuestionnaireResponses);
+    getQuestionnaireResponsesCallback(url,params,processQuestionnaireResponses);
     
 }
 
 function searchQuestionnaires(req,res,getQuestionnairesCallback) {
-    var url = getHostURL(nconf,req) ;
+    var url = getHostURL(req) ;
     var query = req.query;
     var post = req.body;
     var filters= [];
@@ -258,13 +273,13 @@ function searchQuestionnaires(req,res,getQuestionnairesCallback) {
 	}
         res.json(bundle);
     }
-    getQuestionnairesCallback(nconf,url,params,returnQuestionnaires);
+    getQuestionnairesCallback(url,params,returnQuestionnaires);
 }    
 
 
 
-function searchQuestionnaireResponses(req,res,getQuestionnaireResponsessCallback) {
-    var url = getHostURL(nconf,req) ;
+function searchQuestionnaireResponses(req,res,getQuestionnaireResponsesCallback) {
+    var url = getHostURL(req) ;
     var query = req.query;
     var post = req.body;
     var filters= [];
@@ -302,29 +317,29 @@ function searchQuestionnaireResponses(req,res,getQuestionnaireResponsessCallback
 	}
         res.json(bundle);
     }
-    getQuestionnaireResponsesCallback(nconf,url,params,returnQuestionnaireResponses);
+    getQuestionnaireResponsesCallback(url,params,returnQuestionnaireResponses);
 }    
 
-function getQuestionnaires_STU3(nconf,url,params,callback) {
-    getQuestionnaires(nconf,url,params,callback,createQuestionnaireFromFlow_STU3);
+function getQuestionnaires_STU3(url,params,callback) {
+    getQuestionnaires(url,params,callback,createQuestionnaireFromFlow_STU3);
 }
 
-function getQuestionnaires_DSTU2(nconf,url,params,callback) {
-    getQuestionnaires(nconf,url,params,callback,createQuestionnaireFromFlow_DSTU2);
+function getQuestionnaires_DSTU2(url,params,callback) {
+    getQuestionnaires(url,params,callback,createQuestionnaireFromFlow_DSTU2);
 }
 
-function getQuestionnaireResponses_STU3(nconf,url,params,callback) {
-    getQuestionnaireResponses(nconf,url,params,callback,createQuestionnaireResponseFromRun_STU3);
+function getQuestionnaireResponses_STU3(url,params,callback) {
+    getQuestionnaireResponses(url,params,callback,createQuestionnaireResponseFromRun_STU3);
 }
 
-function getQuestionnaireResponses_DSTU2(nconf,url,params,callback) {
-    getQuestionnaireResponses(nconf,url,params,callback,createQuestionnaireResponseFromRun_DSTU2);
+function getQuestionnaireResponses_DSTU2(url,params,callback) {
+    getQuestionnaireResponses(url,params,callback,createQuestionnaireResponseFromRun_DSTU2);
 }
 
 
 
 
-function getQuestionnaires(nconf,url,params,callback,createQuestionnaireFromFlowCallback) {
+function getQuestionnaires(url,params,callback,createQuestionnaireFromFlowCallback) {
     var questionnaires= [];    
     if (!callback) {
 	callback = function(questionnaires) {return questionnaires;};
@@ -399,19 +414,20 @@ function getQuestionnaires(nconf,url,params,callback,createQuestionnaireFromFlow
 
 
 
-function getQuestionnaireResponses(nconf,url,params,callback,createQuestionnaireResponseFromRunCallback) {
+function getQuestionnaireResponses(url,params,callback,createQuestionnaireResponseFromRunCallback) {
     var questionnaireResponses= [];    
     if (!callback) {
 	callback = function(questionnaireResponses) {return questionnaireResponses;};
     }
 
     var rurl = 'http(s)://' + nconf.get('rapidpro:host') + ':'  + nconf.get('rapidpro:port') + "/api/v1/runs.json";
-    console.log('Making request ' + rurl);
+    var qs = query.stringify(params);
+    console.log('Making request ' + rurl + '?' + qs);
     //likely relevant search parameters: 
     //  run: the id of the QR
     //  flow_uuid:   the ID of questionnaire
     //  contact: id ID of the contact
-    var qs = query.stringify(params);
+
 
     var req = hh.request( 
 	{
@@ -440,28 +456,34 @@ function getQuestionnaireResponses(nconf,url,params,callback,createQuestionnaire
                 try {
 		    var details = JSON.parse( body );
 		    if (!details.results || ! Array.isArray(details.results)) {
-			console.log("no flow results ");
+			console.log("no run results ");
 			callback([]);
 			return;
 		    }		    
 		    var tasks = [];
-		    details.results.forEach( function(result) {
+		    details.results.forEach( function(run) {			
 			tasks.push( 
 			    function(callback) {
-				var createQ  = function(flow) {
-				    console.log('createQ' + JSON.stringify(flow,null,"\t"));
-				    if (flow) {
-					questionnaires.push(createQuestionnaireResponseFromRunCallback(url,result,flow));
+				var createQR1  = function(flow) {
+				    var createQR2 = function(contactRef) {
+					console.log('createQR ' + JSON.stringify(run,null,"\t"));
+					if (!contactRef) {
+					    contactRef = '12345';
+					}
+					if (flow && contactRef) {
+					    questionnaireResponses.push(createQuestionnaireResponseFromRunCallback(url,run,flow,contactRef));
+					}
+					callback();
 				    }
-				    callback();
+				    getContactRef(run.contact,createQR2);
+
+					
 				};
-				
-				getFlowExport(result.uuid,createQ); 
+				getFlowExport(run.flow_uuid,createQR1); 
 			    });
 		    });
-		    async.parallel(tasks,function() {console.log('ok'); callback(questionnaires);});
-		    //console.log("Filtering" + JSON.stringify(questionnaires));
-		    //callback(questionnaires);
+		    async.parallel(tasks,function() {console.log('ok'); callback(questionnaireResponses);});
+
                 } catch ( err ) {
                     console.log("Failed to parse rapid pro response." + body);
                     console.log(err);
@@ -477,8 +499,271 @@ function getQuestionnaireResponses(nconf,url,params,callback,createQuestionnaire
     req.end();
 }
 
+function getContactRef(contactid,callback) {
+    console.log('get contact for'  +contactid);
+    var result = {};
+    var params = '?uuid=' + contactid;
+    var req = hh.request( 
+	{
+            hostname : nconf.get("rapidpro:host"),
+            port : nconf.get("rapidpro:port"),
+	    protocol: nconf.get('rapidpro:protocol'),
+            path :  "/api/v1/contacts.json" + params,
+            headers : {
+		'Content-Type': "application/json",
+		'Authorization' : nconf.get("rapidpro:token"),
+            },
+            method : 'GET' 
+	},
+	function( res ) {
+            console.log("RapidPro Status: " +res.statusCode );
+            var body = '';
+            res.on('data', function(chunk) {
+                body += chunk;
+            });
+            res.on('end', function() {
+                try {
+		    result = JSON.parse( body );
+		    console.log("FLOW DEFINITION :"+JSON.stringify(result,null,"\t"));
+		} catch (e) {
+                    console.log("RapidPro error: " +e.message);
+		    callback(false);
+		    return;
+		}
+		if (!result.fields_sets 
+		    || ! (typeof result.field_sets === "object") 
+		    || ! ('globalid' in fields.array_key_exists() )
+		    ) {
+		    console.log("no contact id");
+		    callback(false);
+		    return;
+		}
+		var refurl = nconf.get('hwr:baserl') + '/' +  result.fields.globalid;
+		callback(refurl);
+	    });
+            res.on('error', function(e) {
+                console.log("RapidPro error: " +e.message);
+		callback(false);
+            });
+	});
+    req.on('error', function( req_err ) {
+	console.log("Got error on request to rapidpro");
+	console.log(req_err);
+	callback(false);
+    });
+    req.end();
 
-function createQuestionnaireReponseFromRun_DSTU2(url,result,flow) {
+}
+
+
+function createQuestionnaireResponseFromRun_DSTU2(url,run,flow,contactRef) {
+    var arrivals = [];
+    var questionResponses = [];
+
+    if (run.steps  && Array.isArray(run.steps)) {			    
+	run.steps.forEach(function(step) {
+	    arrivals.push(new Date(step.arrived_on));
+
+	    // check to see if we have a categorized value in step.value
+	    var type = false;
+	    var valuetype = false;
+	    if (flow.rule_sets  && Array.isArray(flow.rule_sets)) {			    
+		flow.rule_sets.forEach(function(ruleset) {
+		    if (! ruleset.uuid.startsWith(step.node)) {
+			return;
+		    }
+		    var choice = false;
+		    var types = [];
+		    var raw = false;
+		    switch (ruleset.ruleset_type) {
+		    case 'wait_recording': //ivr recording
+			break;
+		    case 'wait_digit':	//ivr choice
+			raw =true;
+			ruleset.rules.forEach(function(rule) {
+			    if (!rule.test ||  !rule.test.type == 'eq') { 
+				return;
+			    }
+			    var val = false;
+			    if (rule.category) {
+				val = rule.category[Object.keys(rule.category)[0]];
+			    }
+			    if (! (val === false)) {
+				choice = true;
+			    }
+			});
+			break;
+		    case 'wait_digits':	//ivr multi-digit response
+			raw = true;
+			ruleset.rules.forEach(function(rule) {
+			    if (!rule.test) {
+				return;
+			    }
+			    switch (rule.test.type) {
+			    case 'phone': 
+			    case 'true': //this seems to be just a text string					    
+				types.push('string');
+				break;
+			    case 'not_empty': 
+			    case 'contains_any': 
+			    case 'contains': 
+			    case 'starts': 
+			    case 'regex': 
+				var val = false;
+				if (rule.category) {
+				    val = rule.category[Object.keys(rule.category)[0]];
+				}
+				if (! (val === false)) {
+				    choice =true;
+				}
+				types.push('string');
+				break;
+			    case 'number':
+				types.push('integer');
+				break;
+			    case 'gt':
+			    case 'eq':
+			    case 'lt':
+			    case 'between':
+				var val = false;
+				if (rule.category) {
+				    val = rule.category[Object.keys(rule.category)[0]];
+				}
+				if (! (val === false)) {
+				    choice = true;
+				}
+				types.push('integer');
+				break;
+			    default:
+				break;
+			    };
+			});
+			break;
+		    case 'wait_message':	//sms response
+			raw =true;
+			ruleset.rules.forEach(function(rule) {
+			    if (!rule.test) {
+				return;
+			    }
+			    var type= false;
+			    switch (rule.test.type) {
+			    case 'phone': 
+			    case 'true': //this seems to be just a text string					    
+				types.push('string');
+				break;
+			    case 'not_empty': 
+			    case 'contains_any': 
+			    case 'contains': 
+			    case 'starts': 
+			    case 'regex': 
+				var val = false;
+				if (rule.category) {
+				    val = rule.category[Object.keys(rule.category)[0]];
+				}
+				if (! (val === false)) {
+				    choice = true;
+				}
+				types.push('string');
+				break;
+			    case 'ward': 
+			    case 'district': 
+				// SHOULD HAVE VALUESETS ?
+				break;
+			    case 'date':
+				types.push('date');
+				break;
+			    case 'date_equal':
+			    case 'date_before':
+			    case 'date_after':
+				var val = false;
+				if (rule.category) {
+				    val = rule.category[Object.keys(rule.category)[0]];
+				}
+				if (! (val === false)) {
+				    choice = true;
+				}
+				types.push('date');
+				break;
+			    case 'number':
+				types.push('decimal');//could also be an integer
+				break;
+			    case 'gt':
+			    case 'eq':
+			    case 'lt':
+			    case 'between':
+				var val = false;
+				console.log(rule.category);
+				console.log(Object.keys(rule.category)[0]);
+				if (rule.category) {
+				    val = rule.category[Object.keys(rule.category)[0]];
+				}
+				if (! (val === false)) {
+				    choice =true;
+				}
+				types.push('string');
+				break;
+			    default:
+				break;
+			    }
+			});
+
+			break;
+		    default:
+			break;
+		    }
+		    if (raw) {
+			var questionnaireResponse = {
+			    'linkid' : ruleset.uuid +'.raw',
+			    'answer' : [{'valueString' : step.text}]
+			};
+			questionResponses.push(questionnaireResponse);
+		    }
+		    if (choice) {
+			var questionnaireResponse = {
+			    'linkId': ruleset.uuid  + '.choice',
+			    'answer' : [{ 'valueCoding' : {'code' :step.value}}]
+			};
+			questionResponses.push(questionnaireResponse);
+		    }
+		    utypes = types.filter(function(e,p) {return types.indexOf(e) == p;});
+		    utypes.forEach(function(type) {
+			var valueType = 'value' + type[0].toUpperCase() + type.substring(1);
+			var questionnaireResponse = {
+			    'linkId': ruleset.uuid  + '.' + type,
+			    'answer' : [{ valueType : step.value}]
+			};
+			questionResponses.push(questionnaireResponse);
+		    });
+
+
+		});
+	    }
+				      
+	});
+    }
+    var minDate = new Date(Math.min.apply(null,arrivals));
+    var questionnaireResponse = {
+	'resourceType':'QuestionnaireResponse',
+	'id': run.run ,
+	'meta' : {
+	    'lastUpdated': minDate.toISOString(),
+	},
+	'questionnaire' : {'reference' : getFlowReference(run.flow_uuid)}, 
+	'status' : 'final' , //needs to be fixed.  
+	'source' : {'reference' :  contactRef },
+	'group' : {
+	    'linkId' : 'root',
+	    'question' : questionResponses
+	}
+
+    };    
+    
+    console.log("QUESITONNAIREResponse:" + JSON.stringify(questionnaireResponse,null,"\t"));
+    return questionnaireResponse;
+}
+
+function createQuestionnaireResponseFromRun_STU3(url,run,flow) {
+    //fill me in
 }
 
 function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
@@ -492,10 +777,13 @@ function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 	    }			
 	    var options = [];
 	    console.log('processing ' + ruleset.ruleset_type);
+	    var raw = false;
+	    var types =[];
 	    switch (ruleset.ruleset_type) {
 	    case 'wait_recording': //ivr recording
 		break;
 	    case 'wait_digit':	//ivr choice
+		raw = true;
 		var type = 'choice';
 		ruleset.rules.forEach(function(rule) {
 		    if (!rule.test ||  !rule.test.type == 'eq') { 
@@ -514,16 +802,9 @@ function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 			options.push(option);
 		    }
 		});
-		var question = {
-		    'linkId': ruleset.uuid  + '.' + type,
-		    'type': 'choice',
-		    'options': options,
-		    'text': ruleset.label + ' (' + type +  ')'
-		}
-		questions.push(question);				    
 		break;
 	    case 'wait_digits':	//ivr multi-digit response
-		var types = ['string'];
+		raw = true;
 		ruleset.rules.forEach(function(rule) {
 		    if (!rule.test) {
 			return;
@@ -572,7 +853,7 @@ function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 		});
 		break;
 	    case 'wait_message':	//sms response
-		var types = ['string'];
+		raw = true;
 		ruleset.rules.forEach(function(rule) {
 		    if (!rule.test) {
 			return;
@@ -641,46 +922,53 @@ function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 		    default:
 			break;
 		    }
+
 		});
-		utypes = types.filter(function(e,p) {return types.indexOf(e) == p;});
-		utypes.forEach(function(type) {
-		    var question = {
-			'linkId': ruleset.uuid  + '.' + type,
-			'type': type,
-			'text': ruleset.label  + ' (' + type +  ')'
-		    }
-		    questions.push(question);
-		});		    
-			       
-		if (options.length > 1) {
-		    var question = {
-			'linkId': ruleset.uuid  + '.choice',
-			'type': 'choice',
-			'options': {
-			    'reference' : '#optionsSet-' + ruleset.uuid
-			},
-			'text': ruleset.label + ' ( choice )'
-		    }
-		    optionSets.push(
-			{
-			    'resourceType' : 'ValueSet',
-			    'id' : 'optionSet-' + ruleset.uuid,			    
-			    'codeSystem' : {
-				'concept' : options
-			    }
-			});
-		    questions.push(question);
-		}
+
+		break;
+	    default:
+		break;
+	    }
+	    if (raw) {
 		//now push an question for the raw response
 		questions.push({
 		    'linkId': ruleset.uuid  + '.raw',
 		    'type': 'string',
 		    'text': ruleset.label  + ' (Raw Response)'
 		});
-		break;
-	    default:
-		break;
 	    }
+	    utypes = types.filter(function(e,p) {return types.indexOf(e) == p;});
+	    utypes.forEach(function(type) {
+		var question = {
+		    'linkId': ruleset.uuid  + '.' + type,
+		    'type': type,
+		    'text': ruleset.label  + ' (' + type +  ')'
+		}
+		questions.push(question);
+	    });		    
+
+	    if (options.length > 1) {
+		var question = {
+		    'linkId': ruleset.uuid  + '.choice',
+		    'type': 'choice',
+		    'options': {
+			'reference' : '#optionsSet-' + ruleset.uuid
+		    },
+		    'text': ruleset.label + ' ( choice )'
+		}
+		optionSets.push(
+		    {
+			'resourceType' : 'ValueSet',
+			'id' : 'optionSet-' + ruleset.uuid,			    
+			'codeSystem' : {
+			    'concept' : options
+			}
+		    });
+		questions.push(question);
+	    }
+	    //now push an question for the raw response
+
+
 	});
     }
     if (!flow.metadata) {
@@ -711,7 +999,7 @@ function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 }
 
 function createQuestionnaireFromFlow_STU3(url,result,flow) {
-    //fille me in 
+    //fill me in 
 }
 
 
