@@ -195,7 +195,7 @@ function retrieveQuestionnaire(req,res,getQuestionnairesCallback) {
 	console.log("found:"+JSON.stringify(questionnaires,null,"\t"));
 
 	if ( Object.keys(questionnaires).length == 0 ) {
-	    res.status(500);
+	    res.status(404);
 	    res.json( errorOutcome( ERR_SEARCH, 'information', 'No questionnaire found with uuid ' + req.params.fhir_id));
 	    res.end();
 	} else if ( Object.keys(questionnaires).length >1  ) {
@@ -223,7 +223,7 @@ function retrieveQuestionnaireResponse(req,res,getQuestionnaireResponsesCallback
 	console.log("found:"+JSON.stringify(questionnaireResponses,null,"\t"));
 
 	if ( Object.keys(questionnaireResponses).length == 0 ) {
-	    res.status(500);
+	    res.status(404);
 	    res.json( errorOutcome( ERR_SEARCH, 'information', 'No questionnaire response found with uuid ' + req.params.fhir_id));
 	    res.end();
 	} else if ( Object.keys(questionnaireResponses).length >1  ) {
@@ -266,10 +266,15 @@ function searchQuestionnaires(req,res,getQuestionnairesCallback) {
 	});	
 	res.status(200);
 	res.type("application/json+fhir");
+	var entries = [];
+	questionnaireResponses.forEach(function(qr) {
+	    entries.push({'resource':qr});
+	});
+
         var bundle = { 
 	    resourceType : 'Bundle',
 	    type : 'searchset',
-	    entry : questionnaires
+	    entry : entries
 	}
         res.json(bundle);
     }
@@ -310,11 +315,16 @@ function searchQuestionnaireResponses(req,res,getQuestionnaireResponsesCallback)
 	});	
 	res.status(200);
 	res.type("application/json+fhir");
+	var entries = [];
+	questionnaireResponses.forEach(function(qr) {
+	    entries.push({'resource':qr});
+	});
+
         var bundle = { 
 	    resourceType : 'Bundle',
 	    type : 'searchset',
-	    entry : questionnaireResponses
-	}
+	    entry : entries
+	};
         res.json(bundle);
     }
     getQuestionnaireResponsesCallback(url,params,returnQuestionnaireResponses);
@@ -711,9 +721,15 @@ function createQuestionnaireResponseFromRun_DSTU2(url,run,flow,contactRef) {
 		    default:
 			break;
 		    }
+		    if (step.value === null) {
+			step.value = '';
+		    }
+		    if (step.text === null) {
+			step.text = '';
+		    }
 		    if (raw) {
 			var questionnaireResponse = {
-			    'linkid' : ruleset.uuid +'.raw',
+			    'linkId' : ruleset.uuid +'.raw',
 			    'answer' : [{'valueString' : step.text}]
 			};
 			questionResponses.push(questionnaireResponse);
@@ -727,11 +743,14 @@ function createQuestionnaireResponseFromRun_DSTU2(url,run,flow,contactRef) {
 		    }
 		    utypes = types.filter(function(e,p) {return types.indexOf(e) == p;});
 		    utypes.forEach(function(type) {
-			var valueType = 'value' + type[0].toUpperCase() + type.substring(1);
+			var vt = 'value' + type[0].toUpperCase() + type.substring(1);
 			var questionnaireResponse = {
 			    'linkId': ruleset.uuid  + '.' + type,
-			    'answer' : [{ valueType : step.value}]
+			    'answer': []
 			};
+			var tvt ={};
+			tvt[vt] = step.value;
+			questionnaireResponse.answer.push(tvt);
 			questionResponses.push(questionnaireResponse);
 		    });
 
