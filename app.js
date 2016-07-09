@@ -680,7 +680,7 @@ function createQuestionnaireResponseFromRun_DSTU2(url,run,flow,contactRef) {
 				// SHOULD HAVE VALUESETS ?
 				break;
 			    case 'date':
-				types.push('date');
+				types.push('dateTime');
 				break;
 			    case 'date_equal':
 			    case 'date_before':
@@ -692,7 +692,7 @@ function createQuestionnaireResponseFromRun_DSTU2(url,run,flow,contactRef) {
 				if (! (val === false)) {
 				    choice = true;
 				}
-				types.push('date');
+				types.push('dateTime');
 				break;
 			    case 'number':
 				types.push('decimal');//could also be an integer
@@ -903,7 +903,7 @@ function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 			// SHOULD HAVE VALUESETS ?
 			break;
 		    case 'date':
-			types.push('date');
+			types.push('dateTime');
 			break;
 		    case 'date_equal':
 		    case 'date_before':
@@ -916,7 +916,7 @@ function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 			    var option = {'code' : val};
 			    options.push(option);
 			}
-			types.push('date');
+			types.push('dateTime');
 			break;
 		    case 'number':
 			types.push('decimal');//could also be an integer
@@ -971,7 +971,7 @@ function createQuestionnaireFromFlow_DSTU2(url,result,flow) {
 		    'linkId': ruleset.uuid  + '.choice',
 		    'type': 'choice',
 		    'options': {
-			'reference' : '#optionsSet-' + ruleset.uuid
+			'reference' : '#optionSet-' + ruleset.uuid
 		    },
 		    'text': ruleset.label + ' ( choice )'
 		}
