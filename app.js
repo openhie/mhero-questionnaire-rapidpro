@@ -12,7 +12,7 @@ nconf.defaults( {
     "rpq" : { 
         "port" : 3001,
 	'host' : 'locahost',
-	'protocol' : 'http',
+	'protocol' : 'http:',
 	'hwr' : {
 	    'baseurl' : 'http://localhost/fhirServer/Practitioner'
 	}
@@ -153,12 +153,12 @@ function getHostURL(req) {
     if (req) {
 	url = req.protocol + '://' + req.get('host') ;
     }
-    var ptcl = nconf.get('app:protocol');
+    var ptcl = nconf.get('rpq:protocol');
     if (!ptcl) {
 	ptcl = 'https:';
     }
-    var host = nconf.get('app:host');
-    var port = nconf.get('app:port');
+    var host = nconf.get('rpq:host');
+    var port = nconf.get('rpq:port');
     if (host ) {
 	url = ptcl + '//' + host;
 	if (port) {
@@ -168,18 +168,12 @@ function getHostURL(req) {
     return url;
 }
 
-function getFlowReference(id) {
-    var ptcl = nconf.get('app:protocol');
-    if (!ptcl) {
-	ptcl = 'https:';
-    }
-    var host = nconf.get('app:host');
-    var port = nconf.get('app:port');
-    var url = ptcl + '//' + host;
-    if (port) {
-	url += ':' + port;
-    }
-    return url + '/Quesionnaire/' + id;
+function getFlowReference(id,version) {
+    var ptcl = nconf.get('rpq:protocol');
+    var host = nconf.get('rpq:host');
+    var port = nconf.get('rpq:port');
+    var url = ptcl + '//' + host + ':' + port;
+    return url + '/fhir/' + version + '/Questionnaire/' + id;
 
 }
 
@@ -767,7 +761,7 @@ function createQuestionnaireResponseFromRun_DSTU2(url,run,flow,contactRef) {
 	'meta' : {
 	    'lastUpdated': minDate.toISOString(),
 	},
-	'questionnaire' : {'reference' : getFlowReference(run.flow_uuid)}, 
+	'questionnaire' : {'reference' : getFlowReference(run.flow_uuid,'DSTU2')}, 
 	'status' : 'final' , //needs to be fixed.  
 	'source' : {'reference' :  contactRef },
 	'group' : {
